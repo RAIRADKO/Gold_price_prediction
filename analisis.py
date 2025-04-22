@@ -4,25 +4,18 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, mean_squared_error
 
-# 1. Load dataset (sesuaikan path)
 data = pd.read_csv('gold.csv', parse_dates=['Date'])
 
-# 2. Preprocessing
 data.sort_values('Date', inplace=True)
-# Buat target untuk klasifikasi (1 jika harga naik, 0 jika turun)
 data['target_class'] = (data['Close'].shift(-1) > data['Close']).astype(int)
-# Buat target untuk regresi (harga hari berikutnya)
 data['target_reg'] = data['Close'].shift(-1)
-# Hapus data null
 data.dropna(inplace=True)
 
-# 3. Siapkan fitur: hanya kolom numeric
 feature_df = data.drop(['Date', 'target_class', 'target_reg'], axis=1)
 X = feature_df.select_dtypes(include=[np.number])
 y_class = data['target_class']
 y_reg = data['target_reg']
 
-# 4. Split data (time series -> shuffle=False)
 test_size = 0.2
 random_state = 42
 X_train_c, X_test_c, y_train_c, y_test_c = train_test_split(
@@ -32,21 +25,18 @@ X_train_r, X_test_r, y_train_r, y_test_r = train_test_split(
     X, y_reg, test_size=test_size, random_state=random_state, shuffle=False
 )
 
-# 5. Feature scaling
 det_scaler = StandardScaler()
 X_train_c_scaled = det_scaler.fit_transform(X_train_c)
 X_test_c_scaled = det_scaler.transform(X_test_c)
 X_train_r_scaled = det_scaler.fit_transform(X_train_r)
 X_test_r_scaled = det_scaler.transform(X_test_r)
 
-# 6. GA parameters
 POP_SIZE = 100
 GENERATIONS = 50
 MUTATION_RATE = 0.1
 CROSSOVER_RATE = 0.9
 TOURNAMENT_SIZE = 3
 
-# Helper functions for GA
 def initialize_population(pop_size, chrom_length):
     return np.random.uniform(-1, 1, (pop_size, chrom_length))
 
@@ -72,11 +62,9 @@ def mutate(chrom):
     noise = np.random.normal(0, 0.1, size=len(chrom))
     return np.where(mask, chrom + noise, chrom)
 
-# 7. GA untuk klasifikasi
 print("=== Training Model Klasifikasi ===")
-dim_c = X_train_c_scaled.shape[1] + 1  # +1 untuk bias
+dim_c = X_train_c_scaled.shape[1] + 1
 genomic_c = initialize_population(POP_SIZE, dim_c)
-# augmentasi bias
 Xc_train = np.hstack([np.ones((X_train_c_scaled.shape[0],1)), X_train_c_scaled])
 for gen in range(GENERATIONS):
     fitness_c = []
@@ -94,13 +82,11 @@ for gen in range(GENERATIONS):
         offspring_c.append(mutate(c1))
         offspring_c.append(mutate(c2))
     genomic_c = np.array(offspring_c)
-# evaluasi test
 best_c = genomic_c[np.argmax(fitness_c)]
 Xc_test = np.hstack([np.ones((X_test_c_scaled.shape[0],1)), X_test_c_scaled])
 preds_c_test = (1/(1+np.exp(-Xc_test.dot(best_c))) >= 0.5).astype(int)
 print(f"Akurasi Test: {accuracy_score(y_test_c, preds_c_test):.4f}\n")
 
-# 8. GA untuk regresi
 print("=== Training Model Regresi ===")
 dim_r = X_train_r_scaled.shape[1] + 1
 genomic_r = initialize_population(POP_SIZE, dim_r)
@@ -117,12 +103,10 @@ for gen in range(GENERATIONS):
         offspring_r.append(mutate(c1))
         offspring_r.append(mutate(c2))
     genomic_r = np.array(offspring_r)
-# evaluasi test
 best_r = genomic_r[np.argmax(fitness_r)]
 Xr_test = np.hstack([np.ones((X_test_r_scaled.shape[0],1)), X_test_r_scaled])
 preds_r_test = Xr_test.dot(best_r)
 print(f"MSE Test: {mean_squared_error(y_test_r, preds_r_test):.4f}\n")
-# contoh prediksi vs aktual
 print("Contoh Prediksi vs Aktual:")
 for i in range(5):
     print(f"Prediksi: {preds_r_test[i]:.2f}, Aktual: {y_test_r.iloc[i]:.2f}")
